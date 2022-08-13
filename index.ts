@@ -11,10 +11,17 @@ import { installGlobals } from "https://deno.land/x/virtualstorage@0.1.0/mod.ts"
 // Firebase & Firebase Firestore
 import { initializeApp } from "https://cdn.skypack.dev/firebase@9.9.1/app";
 import {
+  addDoc,
   getFirestore,
   collection,
   getDocs,
 } from "https://cdn.skypack.dev/firebase@9.9.1/firestore";
+import {
+  getDownloadURL,
+  uploadBytes,
+  getStorage,
+  ref,
+} from "https://cdn.skypack.dev/firebase@9.9.1/storage";
 
 // Set up globals for Firebase
 installGlobals();
@@ -36,10 +43,11 @@ const firebaseApp = initializeApp({
 
 // Set up firebase database
 const db = getFirestore(firebaseApp);
+const storage = getStorage();
 
 // Set up routes
 const router = new Router();
-router.get("/bilbies", async (ctx) => {
+router.get("/bilbies", async (ctx, next) => {
   try {
     const colRef = collection(db, "bilbies");
     const { docs } = await getDocs(colRef);
@@ -48,8 +56,95 @@ router.get("/bilbies", async (ctx) => {
       data: docs.map((doc) => ({ _id: doc.id, ...doc.data() })),
     });
   } catch (err) {
-    ctx.response.status = 500;
-    ctx.response.body = err.message;
+    const status = 500;
+    ctx.response.status = status;
+    ctx.response.body = JSON.stringify({
+      error: { message: err.message, status },
+    });
+  }
+});
+
+router.post("/bilbies", async (ctx) => {
+  try {
+    const body = await ctx.request.body({
+      type: "form-data",
+    });
+    const { fields, files } = await body.value.read({ maxSize: 2_000_000 });
+
+    if (!files) {
+      const status = 400;
+      const message = "No image was provided";
+      ctx.response.status = status;
+      ctx.response.body = JSON.stringify({
+        error: { message, status },
+      });
+      return;
+    }
+
+    const file = files[0];
+    if (files.length > 1 || file.name !== "image") {
+      const status = 400;
+      const message =
+        "Only one image is allowed and it must use the correct file key: image";
+      ctx.response.status = status;
+      ctx.response.body = JSON.stringify({
+        error: { message, status },
+      });
+      return;
+    }
+
+    if (!file.content) {
+      const status = 400;
+      const message = "Image is larger than the 2mb limit";
+      ctx.response.status = status;
+      ctx.response.body = JSON.stringify({
+        error: { message, status },
+      });
+      return;
+    }
+
+    if (file.contentType !== "image/jpeg" && file.contentType !== "image/jpg") {
+      const status = 400;
+      const message = "Only JPEG images are supported";
+      ctx.response.status = status;
+      ctx.response.body = JSON.stringify({
+        error: { message, status },
+      });
+      return;
+    }
+
+    if (!fields.alt) {
+      const status = 400;
+      const message = "No alt description was provided";
+      ctx.response.status = status;
+      ctx.response.body = JSON.stringify({
+        error: { message, status },
+      });
+      return;
+    }
+
+    // Save image and update JSON file
+    const colRef = collection(db, "bilbies");
+    const { docs } = await getDocs(colRef);
+    const storageRef = ref(storage, `bilbies-${docs.length + 1}.jpeg`);
+    const snapshot = await uploadBytes(storageRef, file.content, {
+      contentType: "image/jpeg",
+    });
+
+    // Get full url from firebase upload
+    const url = await getDownloadURL(snapshot.ref);
+    await addDoc(collection(db, "bilbies"), {
+      alt: fields.alt,
+      img: url,
+    });
+
+    ctx.response.status = 200;
+  } catch (err) {
+    const status = 500;
+    ctx.response.status = status;
+    ctx.response.body = JSON.stringify({
+      error: { message: err.message, status },
+    });
   }
 });
 
