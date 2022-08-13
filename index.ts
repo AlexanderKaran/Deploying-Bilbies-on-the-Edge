@@ -1,5 +1,5 @@
 // Lib for load config
-import { config as loadEnv } from "https://deno.land/std/dotenv/mod.ts";
+import { config as loadEnv } from "https://deno.land/std@0.151.0/dotenv/mod.ts";
 
 // Oak for API
 import { Application, Router } from "https://deno.land/x/oak@v10.6.0/mod.ts";
