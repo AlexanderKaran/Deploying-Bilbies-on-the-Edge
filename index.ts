@@ -1,14 +1,8 @@
 // Lib for load config
 import { config as loadEnv } from "https://deno.land/std@0.151.0/dotenv/mod.ts";
-
-// Oak for API
 import { Application, Router } from "https://deno.land/x/oak@v10.6.0/mod.ts";
-
-// Patches to make Firebase work
 import "https://deno.land/x/xhr@0.2.0/mod.ts";
 import { installGlobals } from "https://deno.land/x/virtualstorage@0.1.0/mod.ts";
-
-// Firebase & Firebase Firestore
 import { initializeApp } from "https://cdn.skypack.dev/firebase@9.9.1/app";
 import {
   addDoc,
@@ -66,6 +60,14 @@ router.get("/bilbies", async (ctx, next) => {
 
 router.post("/bilbies", async (ctx) => {
   try {
+    // Temp code to run off POST
+    if (!Deno.env.get("POST_BILBIES")) {
+      ctx.response.status = 403;
+      return (ctx.response.body = JSON.stringify({
+        error: { message: "Upload currently not supported", status: 403 },
+      }));
+    }
+
     const body = await ctx.request.body({
       type: "form-data",
     });
@@ -148,7 +150,6 @@ router.post("/bilbies", async (ctx) => {
   }
 });
 
-// Next we need to register the router in the app and tell it to allow the following methods such a GET, POST, PUT, DELETE the router uses
 app.use(router.routes());
 app.use(router.allowedMethods());
 
